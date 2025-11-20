@@ -54,12 +54,16 @@ class SourceSpecification {
 @HostApi()
 abstract class ImagePickerApi {
   @async
-  @ObjCSelector('pickImageWithSource:maxSize:quality:fullMetadata:')
+  @ObjCSelector(
+    'pickImageWithSource:maxSize:quality:fullMetadata:overlayOpacity:overlayImage:',
+  )
   String? pickImage(
     SourceSpecification source,
     MaxSize maxSize,
     int? imageQuality,
     bool requestFullMetadata,
+    int? overlayOpacity,
+    String? overlayImage,
   );
   @async
   @ObjCSelector('pickMultiImageWithMaxSize:quality:fullMetadata:limit:')

@@ -163,6 +163,8 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
                     maxSize:(nonnull FLTMaxSize *)maxSize
                     quality:(nullable NSNumber *)imageQuality
                fullMetadata:(BOOL)fullMetadata
+             overlayOpacity:(nullable NSNumber *)overlayOpacity
+               overlayImage:(nullable NSString *)overlayImage
                  completion:
                      (nonnull void (^)(NSString *_Nullable, FlutterError *_Nullable))completion {
   [self cancelInProgressCall];
@@ -180,6 +182,8 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
   context.imageQuality = imageQuality;
   context.maxItemCount = 1;
   context.requestFullMetadata = fullMetadata;
+  context.overlayOpacity = overlayOpacity;
+  context.overlayImage = overlayImage;
 
   if (source.type == FLTSourceTypeGallery) {  // Capture is not possible with PHPicker
     if (@available(iOS 14, *)) {
