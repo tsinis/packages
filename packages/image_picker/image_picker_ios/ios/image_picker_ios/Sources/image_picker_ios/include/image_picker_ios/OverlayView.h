@@ -16,6 +16,4 @@
 // and optional opacity (integer).
 - (id)initWithFrame:(CGRect)frame andPath:(NSString *)path andOpacity:(NSNumber *)opacity;
 
-// Offset to be used for camera view translate, will be assigned during class initialization.
-@property(assign, nonatomic) CGFloat offset;
 @end

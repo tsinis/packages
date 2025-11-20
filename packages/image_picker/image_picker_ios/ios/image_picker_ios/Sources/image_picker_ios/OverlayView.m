@@ -18,7 +18,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
     self.opaque = NO;                             // Setting the overlay to opaque mode.
     self.backgroundColor = [UIColor clearColor];  // Clears the background color of the overlay.
 
-    // Variable for finding a shortest side, first, ssuming we are in portrait mode.
+    // Variable for finding a shortest side, first, assuming we are in portrait mode.
     float shortestSide = self.bounds.size.width;
     // If overlay is started in landscape mode overlay should be rotated.
     bool isLandscape = shortestSide > self.bounds.size.height;
@@ -61,9 +61,6 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
           break;
       }
     }
-    // Setting offset property to padding value, to be used in
-    // [imagePickerController.cameraViewTransform].
-    self.offset = (CGFloat)padding;
     // Reduce the height with vertical padding on both sides.
     int paddedLongestSide = longestSide - (padding * 2);
     // Actual frame of the camera preview.
