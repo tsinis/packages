@@ -6,10 +6,13 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:mime/mime.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 void main() {
@@ -39,6 +42,23 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   List<XFile>? _mediaFileList;
+
+  Future<String> _getAssetPath(String fileName) async {
+    final Directory tempDir = await getTemporaryDirectory();
+    final String tempPath = tempDir.path;
+    final String filePath = '$tempPath/$fileName';
+    final File file = File(filePath);
+    if (!file.existsSync()) {
+      final ByteData byteData = await rootBundle.load('assets/$fileName');
+      final ByteBuffer buffer = byteData.buffer;
+      await file.create(recursive: true);
+      await file.writeAsBytes(
+        buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+      );
+    }
+
+    return file.path;
+  }
 
   void _setImageFileListFromFile(XFile? value) {
     _mediaFileList = value == null ? null : <XFile>[value];
@@ -177,18 +197,19 @@ class _MyHomePageState extends State<MyHomePage> {
           int? limit,
         ) async {
           try {
-            final XFile? pickedFile = await _picker.getImageFromSource(
+            final String overlayImage = await _getAssetPath('icon_flutter.png');
+            final PickedFile? pickedFile = await _picker.pickImage(
               source: source,
-              options: ImagePickerOptions(
-                maxWidth: maxWidth,
-                maxHeight: maxHeight,
-                imageQuality: quality,
-              ),
+              maxWidth: maxWidth,
+              maxHeight: maxHeight,
+              imageQuality: quality,
+              overlayImage: overlayImage,
+              overlayOpacity: 50,
             );
             if (pickedFile != null && context.mounted) {
-              _showPickedSnackBar(context, <XFile>[pickedFile]);
+              _showPickedSnackBar(context, <XFile>[XFile(pickedFile.path)]);
             }
-            setState(() => _setImageFileListFromFile(pickedFile));
+            setState(() => _setImageFileListFromFile(null));
           } catch (e) {
             setState(() => _pickImageError = e);
           }
