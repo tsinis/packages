@@ -15,7 +15,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
 // Follows the class description from the "OverlayView.h" header file.
 - (id)initWithFrame:(CGRect)frame andPath:(NSString *)path andOpacity:(NSNumber *)opacity {
   if (self = [super initWithFrame:frame]) {
-    self.opaque = NO;                             // Setting the overlay to opaque mode.
+    self.opaque = NO;                             // Setting the overlay to non-opaque (transparent) mode.
     self.backgroundColor = [UIColor clearColor];  // Clears the background color of the overlay.
 
     // Variable for finding a shortest side, first, assuming we are in portrait mode.
