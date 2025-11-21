@@ -12,7 +12,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
 
 // Implementation of the [OverlayView] class.
 @implementation OverlayView
-// Follows the class description from a "".m" file.
+// Follows the class description from the "OverlayView.h" header file.
 - (id)initWithFrame:(CGRect)frame andPath:(NSString *)path andOpacity:(NSNumber *)opacity {
   if (self = [super initWithFrame:frame]) {
     self.opaque = NO;                             // Setting the overlay to opaque mode.
