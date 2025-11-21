@@ -35,7 +35,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
 
     float cameraAspectRatio = 4.0 / 3.0;  // Camera picker always has 4/3 aspect ratio.
     float longestSide =
-        shortestSide * cameraAspectRatio;  // So we can calulate the height of the camera preview.
+        shortestSide * cameraAspectRatio;  // So we can calculate the height of the camera preview.
 
     // Camera preview has different Y offset than it's "preview" on the "Retake/Use Photo" screen:
     // https://stackoverflow.com/questions/28373749/uiimagepickercontrollers-cameraoverlayview-is-offset-after-taking-photo
