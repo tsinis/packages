@@ -25,7 +25,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
 
     // This boolean will be later used, since on iOS 16 view will be automatically
     // rotated to [preferredInterfaceOrientationForPresentation] and also the
-    // [shouldAutorotate] flag depricated there (so it's not used at all).
+    // [shouldAutorotate] flag deprecated there (so it's not used at all).
     bool isNewestIos = false;
     // If iOS version is 16.0 or higher/newer, mark it as true.
     if (@available(iOS 16.0, *)) isNewestIos = true;
