@@ -39,7 +39,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
 
     // Camera preview has different Y offset than it's "preview" on the "Retake/Use Photo" screen:
     // https://stackoverflow.com/questions/28373749/uiimagepickercontrollers-cameraoverlayview-is-offset-after-taking-photo
-    // but since we are hidding the overlay with notifications observer it shouldn't be necessary to
+    // but since we are hiding the overlay with notifications observer it shouldn't be necessary to
     // use at this moment of time.
     int padding = 0;
     // And also position of camera preview is quite different on different iPhone models, since we
