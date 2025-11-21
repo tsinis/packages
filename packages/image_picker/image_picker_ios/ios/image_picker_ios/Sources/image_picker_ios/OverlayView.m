@@ -82,7 +82,7 @@ static CGFloat clamp(CGFloat v, CGFloat min, CGFloat max) { return MIN(MAX(v, mi
     overlayView.alpha = clamp((CGFloat)opacityAlpha, 0.0f, 1.0f);
 
     // On newest iOS view will be automatically rotated to the portrait mode since it's a
-    // [CUIImagePickerController] prefered orientation.
+    // [CUIImagePickerController] preferred orientation.
     if (isLandscape && !isNewestIos) {
       // This modifier is needed for transforming landscape mode when it's in
       // [UIInterfaceOrientationLandscapeRight]
