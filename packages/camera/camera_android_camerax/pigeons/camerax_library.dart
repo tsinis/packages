@@ -251,6 +251,9 @@ abstract class CameraInfo {
   /// (default) orientation.
   late int sensorRotationDegrees;
 
+  /// Returns the lens direction of this camera.
+  late LensFacing lensFacing;
+
   /// Returns a ExposureState.
   late ExposureState exposureState;
 
@@ -416,7 +419,7 @@ abstract class DeviceOrientationManager {
   ),
 )
 abstract class Preview extends UseCase {
-  Preview(int? targetRotation);
+  Preview(int? targetRotation, CameraIntegerRange? targetFpsRange);
 
   late final ResolutionSelector? resolutionSelector;
 
@@ -455,7 +458,10 @@ abstract class Preview extends UseCase {
 )
 abstract class VideoCapture extends UseCase {
   /// Create a `VideoCapture` associated with the given `VideoOutput`.
-  VideoCapture.withOutput(VideoOutput videoOutput);
+  VideoCapture.withOutput(
+    VideoOutput videoOutput,
+    CameraIntegerRange? targetFpsRange,
+  );
 
   /// Gets the VideoOutput associated with this VideoCapture.
   VideoOutput getOutput();
@@ -601,7 +607,7 @@ abstract class ImageCapture extends UseCase {
 
   /// Captures a new still image for in memory access.
   @async
-  String takePicture();
+  String takePicture(SystemServicesManager systemServicesManager);
 
   /// Sets the desired rotation of the output image.
   void setTargetRotation(int rotation);
@@ -803,7 +809,11 @@ abstract class ZoomState {
   ),
 )
 abstract class ImageAnalysis extends UseCase {
-  ImageAnalysis(int? targetRotation, int? outputImageFormat);
+  ImageAnalysis(
+    int? targetRotation,
+    CameraIntegerRange? targetFpsRange,
+    int? outputImageFormat,
+  );
 
   late final ResolutionSelector? resolutionSelector;
 

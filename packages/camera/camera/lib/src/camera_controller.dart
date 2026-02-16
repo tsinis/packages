@@ -174,7 +174,7 @@ class CameraValue {
   }) {
     return CameraValue(
       isInitialized: isInitialized ?? this.isInitialized,
-      errorDescription: errorDescription,
+      errorDescription: errorDescription ?? this.errorDescription,
       previewSize: previewSize ?? this.previewSize,
       isRecordingVideo: isRecordingVideo ?? this.isRecordingVideo,
       isTakingPicture: isTakingPicture ?? this.isTakingPicture,
@@ -327,12 +327,11 @@ class CameraController extends ValueNotifier<CameraValue> {
       );
     }
 
-    final Completer<void> initializeCompleter = Completer<void>();
+    final initializeCompleter = Completer<void>();
     _initializeFuture = initializeCompleter.future;
 
     try {
-      final Completer<CameraInitializedEvent> initializeCompleter =
-          Completer<CameraInitializedEvent>();
+      final initializeCompleter = Completer<CameraInitializedEvent>();
 
       _deviceOrientationSubscription ??= CameraPlatform.instance
           .onDeviceOrientationChanged()
@@ -350,6 +349,14 @@ class CameraController extends ValueNotifier<CameraValue> {
           CameraInitializedEvent event,
         ) {
           initializeCompleter.complete(event);
+        }),
+      );
+
+      _unawaited(
+        CameraPlatform.instance.onCameraError(_cameraId).first.then((
+          CameraErrorEvent event,
+        ) {
+          value = value.copyWith(errorDescription: event.description);
         }),
       );
 

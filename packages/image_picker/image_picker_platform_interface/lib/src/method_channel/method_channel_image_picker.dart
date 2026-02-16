@@ -163,7 +163,7 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
 
     assert(result.containsKey('path') != result.containsKey('errorCode'));
 
-    final String? type = result['type'] as String?;
+    final type = result['type'] as String?;
     assert(type == kTypeImage || type == kTypeVideo);
 
     RetrieveType? retrieveType;
@@ -181,7 +181,7 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
       );
     }
 
-    final String? path = result['path'] as String?;
+    final path = result['path'] as String?;
 
     return LostData(
       file: path != null ? PickedFile(path) : null,
@@ -264,7 +264,7 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
   Future<List<XFile>> getMedia({required MediaOptions options}) async {
     final ImageOptions imageOptions = options.imageOptions;
 
-    final Map<String, dynamic> args = <String, dynamic>{
+    final args = <String, dynamic>{
       'maxImageWidth': imageOptions.maxWidth,
       'maxImageHeight': imageOptions.maxHeight,
       'imageQuality': imageOptions.imageQuality,
@@ -309,7 +309,7 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
 
     assert(result.containsKey('path') != result.containsKey('errorCode'));
 
-    final String? type = result['type'] as String?;
+    final type = result['type'] as String?;
     assert(type == kTypeImage || type == kTypeVideo || type == kTypeMedia);
 
     RetrieveType? retrieveType;
@@ -330,7 +330,7 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
       );
     }
 
-    final String? path = result['path'] as String?;
+    final path = result['path'] as String?;
 
     final List<String>? pathList = (result['pathList'] as List<dynamic>?)
         ?.cast<String>();
