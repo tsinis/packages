@@ -24,6 +24,8 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
     double? maxHeight,
     int? imageQuality,
     CameraDevice preferredCameraDevice = CameraDevice.rear,
+    int? overlayOpacity,
+    String? overlayImage,
   }) async {
     final String? path = await _getImagePath(
       source: source,
@@ -93,6 +95,8 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
     int? imageQuality,
     CameraDevice preferredCameraDevice = CameraDevice.rear,
     bool requestFullMetadata = true,
+    int? overlayOpacity,
+    String? overlayImage,
   }) {
     if (imageQuality != null && (imageQuality < 0 || imageQuality > 100)) {
       throw ArgumentError.value(
@@ -117,6 +121,8 @@ class MethodChannelImagePicker extends ImagePickerPlatform {
       'imageQuality': imageQuality,
       'cameraDevice': preferredCameraDevice.index,
       'requestFullMetadata': requestFullMetadata,
+      'overlayOpacity': overlayOpacity,
+      'overlayImage': overlayImage,
     });
   }
 

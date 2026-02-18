@@ -48,6 +48,9 @@ typedef void (^FlutterResultAdapter)(NSArray<NSString *> *_Nullable, FlutterErro
 /// Whether the picker should include videos in the list.
 @property(nonatomic, assign) BOOL includeVideo;
 
+@property(nonatomic, strong, nullable) NSNumber *overlayOpacity;
+@property(nonatomic, strong, nullable) NSString *overlayImage;
+
 @end
 
 #pragma mark -

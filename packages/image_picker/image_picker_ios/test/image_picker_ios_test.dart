@@ -903,6 +903,8 @@ class _FakeImagePickerApi implements ImagePickerApi {
     MaxSize maxSize,
     int? imageQuality,
     bool requestFullMetadata,
+    int? overlayOpacity,
+    String? overlayImage,
   ) async {
     passedSelectionType = _SelectionType.image;
     passedSource = source;
