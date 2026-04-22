@@ -14,6 +14,8 @@
 // UIView's are initialized with initWithFrame:(CGRect)frame initializer,
 // [OverlayView] will also require optional path to overlay image (string)
 // and optional opacity (integer).
-- (id)initWithFrame:(CGRect)frame andPath:(NSString *)path andOpacity:(NSNumber *)opacity;
+- (instancetype)initWithFrame:(CGRect)frame
+                      andPath:(NSString *)path
+                   andOpacity:(NSNumber *)opacity;
 
 @end
