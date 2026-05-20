@@ -62,6 +62,8 @@ class ImagePickerIOS extends ImagePickerPlatform {
     double? maxHeight,
     int? imageQuality,
     CameraDevice preferredCameraDevice = CameraDevice.rear,
+    int? overlayOpacity,
+    String? overlayImage,
   }) async {
     final String? path = await _pickImageAsPath(
       source: source,
@@ -71,6 +73,8 @@ class ImagePickerIOS extends ImagePickerPlatform {
         imageQuality: imageQuality,
         preferredCameraDevice: preferredCameraDevice,
       ),
+      overlayOpacity: overlayOpacity,
+      overlayImage: overlayImage,
     );
     return path != null ? PickedFile(path) : null;
   }
@@ -157,6 +161,8 @@ class ImagePickerIOS extends ImagePickerPlatform {
   Future<String?> _pickImageAsPath({
     required ImageSource source,
     ImagePickerOptions options = const ImagePickerOptions(),
+    int? overlayOpacity,
+    String? overlayImage,
   }) {
     final int? imageQuality = options.imageQuality;
     if (imageQuality != null && (imageQuality < 0 || imageQuality > 100)) {
@@ -185,6 +191,8 @@ class ImagePickerIOS extends ImagePickerPlatform {
       MaxSize(width: maxWidth, height: maxHeight),
       imageQuality,
       options.requestFullMetadata,
+      overlayOpacity,
+      overlayImage,
     );
   }
 

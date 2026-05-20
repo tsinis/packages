@@ -12,6 +12,8 @@
 #import <PhotosUI/PhotosUI.h>
 #import <UIKit/UIKit.h>
 
+#import "./include/image_picker_ios/CUIImagePickerController.h"
+#import "./include/image_picker_ios/OverlayView.h"
 #import "./include/image_picker_ios/messages.g.h"
 #import "FLTImagePickerImageUtil.h"
 #import "FLTImagePickerMetaDataUtil.h"
@@ -76,7 +78,7 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
     return controller;
   }
 
-  return [[UIImagePickerController alloc] init];
+  return [[CUIImagePickerController alloc] init];
 }
 
 - (void)setImagePickerControllerOverrides:
@@ -166,6 +168,8 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
                     maxSize:(nonnull FLTMaxSize *)maxSize
                     quality:(nullable NSNumber *)imageQuality
                fullMetadata:(BOOL)fullMetadata
+             overlayOpacity:(nullable NSNumber *)overlayOpacity
+               overlayImage:(nullable NSString *)overlayImage
                  completion:
                      (nonnull void (^)(NSString *_Nullable, FlutterError *_Nullable))completion {
   [self cancelInProgressCall];
@@ -183,6 +187,8 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
   context.imageQuality = imageQuality;
   context.maxItemCount = 1;
   context.requestFullMetadata = fullMetadata;
+  context.overlayOpacity = overlayOpacity;
+  context.overlayImage = overlayImage;
 
   if (source.type == FLTSourceTypeGallery) {  // Capture is not possible with PHPicker
     if (@available(iOS 14, *)) {
@@ -313,6 +319,15 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
   }
 }
 
+/// Helper method to check if overlay data is available in the call context.
+- (BOOL)hasOverlayData {
+  // Should be checked first, otherwise it can lead to runtime exceptions.
+  if (self.callContext == nil) return NO;
+  // Only add overlay if image exists and opacity is more than zero.
+  return [self.callContext.overlayImage length] > 0 && self.callContext.overlayOpacity != nil &&
+         [self.callContext.overlayOpacity intValue] > 0;
+}
+
 - (void)showCamera:(UIImagePickerControllerCameraDevice)device
     withImagePicker:(UIImagePickerController *)imagePickerController {
   @synchronized(self) {
@@ -325,6 +340,16 @@ typedef NS_ENUM(NSInteger, ImagePickerClassType) { UIImagePickerClassType, PHPic
       [UIImagePickerController isCameraDeviceAvailable:device]) {
     imagePickerController.sourceType = UIImagePickerControllerSourceTypeCamera;
     imagePickerController.cameraDevice = device;
+
+    if ([self hasOverlayData]) {
+      OverlayView *overlay = [[OverlayView alloc] initWithFrame:imagePickerController.view.bounds
+                                                        andPath:self.callContext.overlayImage
+                                                     andOpacity:self.callContext.overlayOpacity];
+      imagePickerController.cameraOverlayView = overlay;
+      imagePickerController.cameraOverlayView.hidden =
+          YES;  // Will be shown after delay in CUIImagePickerController
+    }
+
     UIViewController *presentingController =
         [self presentingViewControllerForImagePickerInNewWindow];
     [presentingController presentViewController:imagePickerController animated:YES completion:nil];
