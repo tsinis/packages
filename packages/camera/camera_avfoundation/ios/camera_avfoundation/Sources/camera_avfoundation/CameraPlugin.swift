@@ -133,25 +133,58 @@ extension CameraPlugin: CameraApi {
         .builtInUltraWideCamera,
       ]
 
-      let devices = strongSelf.deviceDiscoverer.discoverySession(
-        withDeviceTypes: discoveryDevices,
-        mediaType: .video,
-        position: .unspecified)
+      let reply = strongSelf.discoverPlatformCameras(types: discoveryDevices)
+      completion(.success(reply))
+    }
+  }
 
-      var reply: [PlatformCameraDescription] = []
-
-      for device in devices {
-        let lensFacing = strongSelf.platformLensDirection(for: device)
-        let lensType = strongSelf.platformLensType(for: device)
-        let cameraDescription = PlatformCameraDescription(
-          name: device.uniqueID,
-          lensDirection: lensFacing,
-          lensType: lensType
-        )
-        reply.append(cameraDescription)
+  func getLogicalCameras(
+    completion: @escaping (Result<[PlatformCameraDescription], any Error>) -> Void
+  ) {
+    captureSessionQueue.async { [weak self] in
+      guard let strongSelf = self else {
+        // Plugin was detached before the queued work ran; complete with an
+        // explicit error so the Dart side's Future doesn't hang.
+        completion(
+          .failure(
+            PigeonError(
+              code: "camera_plugin_detached",
+              message: "CameraPlugin was detached before getLogicalCameras could run.",
+              details: nil)))
+        return
       }
 
+      // Virtual multi-lens devices: AVFoundation auto-switches the underlying
+      // physical lens based on the requested zoom factor, enabling seamless
+      // 0.5×-telephoto pinch zoom from a single `CameraDescription`. The order
+      // is most-capable-first (triple > dualWide > dual) so the example app
+      // can simply pick `firstWhere(lensDirection == back)` to get the best
+      // logical camera for a given position.
+      let logicalDevices: [AVCaptureDevice.DeviceType] = [
+        .builtInTripleCamera,
+        .builtInDualWideCamera,
+        .builtInDualCamera,
+      ]
+
+      let reply = strongSelf.discoverPlatformCameras(types: logicalDevices)
       completion(.success(reply))
+    }
+  }
+
+  private func discoverPlatformCameras(
+    types: [AVCaptureDevice.DeviceType]
+  ) -> [PlatformCameraDescription] {
+    let devices = deviceDiscoverer.discoverySession(
+      withDeviceTypes: types,
+      mediaType: .video,
+      position: .unspecified)
+
+    return devices.map { device in
+      PlatformCameraDescription(
+        name: device.uniqueID,
+        lensDirection: platformLensDirection(for: device),
+        lensType: platformLensType(for: device)
+      )
     }
   }
 
@@ -176,8 +209,12 @@ extension CameraPlugin: CameraApi {
       return .telephoto
     case .builtInUltraWideCamera:
       return .ultraWide
+    case .builtInDualCamera:
+      return .dual
     case .builtInDualWideCamera:
-      return .wide
+      return .dualWide
+    case .builtInTripleCamera:
+      return .triple
     default:
       return .unknown
     }

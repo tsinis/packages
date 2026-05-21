@@ -24,7 +24,7 @@ enum PlatformCameraLensDirection {
   external,
 }
 
-// Pigeon version of CameraLensDirection.
+// Pigeon version of CameraLensType.
 enum PlatformCameraLensType {
   /// A built-in wide-angle camera device type.
   wide,
@@ -34,6 +34,18 @@ enum PlatformCameraLensType {
 
   /// A built-in camera device type with a shorter focal length than a wide-angle camera.
   ultraWide,
+
+  /// A virtual camera device fusing a wide-angle and a telephoto camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  dual,
+
+  /// A virtual camera device fusing a wide-angle and an ultra-wide camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  dualWide,
+
+  /// A virtual camera device fusing wide-angle, ultra-wide, and telephoto cameras,
+  /// which automatically switches between physical lenses based on the zoom factor.
+  triple,
 
   /// Unknown camera device type.
   unknown,
@@ -193,6 +205,15 @@ abstract class CameraApi {
   @async
   @ObjCSelector('availableCamerasWithCompletion')
   List<PlatformCameraDescription> getAvailableCameras();
+
+  /// Returns the list of available logical (virtual multi-lens) cameras.
+  ///
+  /// Logical cameras fuse two or more physical lenses and switch between them
+  /// automatically based on the requested zoom factor (e.g. iOS
+  /// `builtInTripleCamera`, `builtInDualWideCamera`, `builtInDualCamera`).
+  @async
+  @ObjCSelector('logicalCamerasWithCompletion')
+  List<PlatformCameraDescription> getLogicalCameras();
 
   /// Create a new camera with the given settings, and returns its ID.
   @async

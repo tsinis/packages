@@ -75,6 +75,34 @@ class AVFoundationCamera extends CameraPlatform {
     }
   }
 
+  /// Returns logical (virtual multi-lens) cameras available on the device.
+  ///
+  /// Logical cameras fuse two or more physical lenses into a single device and
+  /// switch between them automatically based on the requested zoom factor.
+  /// Selecting one of these for [CameraController] enables seamless
+  /// pinch-to-zoom across the constituent lenses — for example covering
+  /// 0.5× through telephoto on a Pro-class iPhone without any UI lens-switch
+  /// button.
+  ///
+  /// This is an iOS-specific extension that intentionally lives on
+  /// [AVFoundationCamera] rather than [CameraPlatform], since the underlying
+  /// AVFoundation `builtInTripleCamera` / `builtInDualWideCamera` /
+  /// `builtInDualCamera` device types have no direct cross-platform analogue.
+  /// On non-iOS platforms an empty list is returned.
+  ///
+  /// The returned [CameraDescription]s are normal camera handles and can be
+  /// passed to [CameraController] like any other entry from
+  /// [availableCameras].
+  Future<List<CameraDescription>> getLogicalCameras() async {
+    try {
+      return (await _hostApi.getLogicalCameras())
+          .map(cameraDescriptionFromPlatform)
+          .toList();
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
   @override
   Future<int> createCamera(
     CameraDescription cameraDescription,

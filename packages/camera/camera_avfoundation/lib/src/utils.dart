@@ -36,6 +36,12 @@ CameraLensType cameraLensTypeFromPlatform(PlatformCameraLensType type) {
     PlatformCameraLensType.wide => CameraLensType.wide,
     PlatformCameraLensType.telephoto => CameraLensType.telephoto,
     PlatformCameraLensType.ultraWide => CameraLensType.ultraWide,
+    // Virtual multi-lens devices (dual/dualWide/triple) all fuse a wide-angle
+    // camera; we surface them as `wide` on the cross-platform interface and
+    // expose richer typing via `AVFoundationCamera.getLogicalCameras`.
+    PlatformCameraLensType.dual ||
+    PlatformCameraLensType.dualWide ||
+    PlatformCameraLensType.triple => CameraLensType.wide,
     PlatformCameraLensType.unknown => CameraLensType.unknown,
   };
 }

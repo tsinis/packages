@@ -71,6 +71,18 @@ enum PlatformCameraLensType {
   /// A built-in camera device type with a shorter focal length than a wide-angle camera.
   ultraWide,
 
+  /// A virtual camera device fusing a wide-angle and a telephoto camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  dual,
+
+  /// A virtual camera device fusing a wide-angle and an ultra-wide camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  dualWide,
+
+  /// A virtual camera device fusing wide-angle, ultra-wide, and telephoto cameras,
+  /// which automatically switches between physical lenses based on the zoom factor.
+  triple,
+
   /// Unknown camera device type.
   unknown,
 }
@@ -624,6 +636,40 @@ class CameraApi {
   Future<List<PlatformCameraDescription>> getAvailableCameras() async {
     final pigeonVar_channelName =
         'dev.flutter.pigeon.camera_avfoundation.CameraApi.getAvailableCameras$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+    if (pigeonVar_replyList == null) {
+      throw _createConnectionError(pigeonVar_channelName);
+    } else if (pigeonVar_replyList.length > 1) {
+      throw PlatformException(
+        code: pigeonVar_replyList[0]! as String,
+        message: pigeonVar_replyList[1] as String?,
+        details: pigeonVar_replyList[2],
+      );
+    } else if (pigeonVar_replyList[0] == null) {
+      throw PlatformException(
+        code: 'null-error',
+        message: 'Host platform returned null value for non-null return value.',
+      );
+    } else {
+      return (pigeonVar_replyList[0] as List<Object?>?)!
+          .cast<PlatformCameraDescription>();
+    }
+  }
+
+  /// Returns the list of available logical (virtual multi-lens) cameras.
+  ///
+  /// Logical cameras fuse two or more physical lenses and switch between them
+  /// automatically based on the requested zoom factor (e.g. iOS
+  /// `builtInTripleCamera`, `builtInDualWideCamera`, `builtInDualCamera`).
+  Future<List<PlatformCameraDescription>> getLogicalCameras() async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.camera_avfoundation.CameraApi.getLogicalCameras$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,

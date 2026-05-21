@@ -151,8 +151,17 @@ enum PlatformCameraLensType: Int {
   case telephoto = 1
   /// A built-in camera device type with a shorter focal length than a wide-angle camera.
   case ultraWide = 2
+  /// A virtual camera device fusing a wide-angle and a telephoto camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  case dual = 3
+  /// A virtual camera device fusing a wide-angle and an ultra-wide camera, which
+  /// automatically switches between physical lenses based on the zoom factor.
+  case dualWide = 4
+  /// A virtual camera device fusing wide-angle, ultra-wide, and telephoto cameras,
+  /// which automatically switches between physical lenses based on the zoom factor.
+  case triple = 5
   /// Unknown camera device type.
-  case unknown = 3
+  case unknown = 6
 }
 
 enum PlatformDeviceOrientation: Int {
@@ -638,6 +647,13 @@ protocol CameraApi {
   /// Returns the list of available cameras.
   func getAvailableCameras(
     completion: @escaping (Result<[PlatformCameraDescription], Error>) -> Void)
+  /// Returns the list of available logical (virtual multi-lens) cameras.
+  ///
+  /// Logical cameras fuse two or more physical lenses and switch between them
+  /// automatically based on the requested zoom factor (e.g. iOS
+  /// `builtInTripleCamera`, `builtInDualWideCamera`, `builtInDualCamera`).
+  func getLogicalCameras(
+    completion: @escaping (Result<[PlatformCameraDescription], Error>) -> Void)
   /// Create a new camera with the given settings, and returns its ID.
   func create(
     cameraName: String, settings: PlatformMediaSettings,
@@ -750,6 +766,24 @@ class CameraApiSetup {
       }
     } else {
       getAvailableCamerasChannel.setMessageHandler(nil)
+    }
+    /// Returns the list of available logical (virtual multi-lens) cameras.
+    let getLogicalCamerasChannel = FlutterBasicMessageChannel(
+      name: "dev.flutter.pigeon.camera_avfoundation.CameraApi.getLogicalCameras\(channelSuffix)",
+      binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      getLogicalCamerasChannel.setMessageHandler { _, reply in
+        api.getLogicalCameras { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      getLogicalCamerasChannel.setMessageHandler(nil)
     }
     /// Create a new camera with the given settings, and returns its ID.
     let createChannel = FlutterBasicMessageChannel(
