@@ -179,6 +179,12 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
+    // Raise the cap so individual `AVCapturePhotoSettings` are allowed to opt
+    // into `.quality` (Deep Fusion / Smart HDR / OIS-aware fusion). Defaults
+    // to `.balanced`, and AVFoundation throws `NSInvalidArgumentException`
+    // when a per-shot setting exceeds the output's cap. Must be set before
+    // the output is added to the session.
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
