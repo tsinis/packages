@@ -721,6 +721,14 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
+    // Opt into AVFoundation's quality-prioritised photo pipeline (Deep Fusion,
+    // Smart HDR, OIS-aware longer fusion windows on capable hardware). This
+    // produces visibly sharper handheld shots on the OIS-bearing wide
+    // constituent of virtual multi-lens devices at the cost of slightly longer
+    // capture latency in low light. On older SoCs without those pipelines the
+    // value is accepted but behaves equivalently to `.balanced`.
+    settings.photoQualityPrioritization = .quality
+
     if flashMode != .torch {
       settings.flashMode = getAVCaptureFlashMode(for: flashMode)
     }
