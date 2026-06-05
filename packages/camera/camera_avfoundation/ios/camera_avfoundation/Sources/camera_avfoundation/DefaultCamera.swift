@@ -65,6 +65,12 @@ final class DefaultCamera: NSObject, Camera {
   var capturePhotoOutput: CapturePhotoOutput
   private var captureVideoInput: CaptureInput
 
+  /// The processed-photo output size selected for the active format, used to
+  /// drive in-pipeline downscaling on iOS 16+. `nil` when dimension targeting
+  /// is not applied (e.g. iOS < 16, or a non-photo session preset). See
+  /// `configurePhotoOutputMaxDimensions`.
+  private var photoMaxDimensions: CMVideoDimensions?
+
   private var videoWriter: AssetWriter?
   private var videoWriterInput: AssetWriterInput?
   private var audioWriterInput: AssetWriterInput?
@@ -179,12 +185,10 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
-    // Raise the cap so individual `AVCapturePhotoSettings` are allowed to opt
-    // into `.quality` (Deep Fusion / Smart HDR / OIS-aware fusion). Defaults
-    // to `.balanced`, and AVFoundation throws `NSInvalidArgumentException`
-    // when a per-shot setting exceeds the output's cap. Must be set before
-    // the output is added to the session.
-    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
+    // Keep the per-shot quality cap at `.balanced` (AVFoundation's default).
+    // `.quality` would add visible capture latency in low light and must not
+    // exceed this cap or AVFoundation throws `NSInvalidArgumentException`.
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .balanced
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
@@ -300,6 +304,20 @@ final class DefaultCamera: NSObject, Camera {
       }
       fallthrough
     case .veryHigh:
+      // Pin a 4:3 format that natively emits ~1920x1440 stills (matching
+      // `image_picker`) instead of the softer 16:9 `.hd1920x1080` crop. The
+      // `.photo` preset can't be used: on many devices its format only offers
+      // the full-sensor photo size (e.g. 4032x3024), leaving `maxPhotoDimensions`
+      // nothing smaller to target. iOS 16+; older iOS falls back to 1080p.
+      if #available(iOS 16.0, *), let (format, dimensions) = fourThreePhotoFormat() {
+        videoCaptureSession.sessionPreset = .inputPriority
+        try captureDevice.lockForConfiguration()
+        captureDevice.flutterActiveFormat = format
+        captureDevice.unlockForConfiguration()
+        capturePhotoOutput.avOutput.maxPhotoDimensions = dimensions
+        photoMaxDimensions = dimensions
+        break
+      }
       if videoCaptureSession.canSetSessionPreset(.hd1920x1080) {
         videoCaptureSession.sessionPreset = .hd1920x1080
         break
@@ -339,6 +357,53 @@ final class DefaultCamera: NSObject, Camera {
     let size = videoDimensionsConverter(captureDevice.flutterActiveFormat)
     previewSize = CGSize(width: CGFloat(size.width), height: CGFloat(size.height))
     audioCaptureSession.sessionPreset = videoCaptureSession.sessionPreset
+  }
+
+  /// Returns the 4:3 device format and the photo dimension to request for
+  /// `ResolutionPreset.veryHigh`, so stills match `image_picker` geometry
+  /// (~1920x1440) in-pipeline with no rescale.
+  ///
+  /// Among 4:3 formats that can emit a ~1920x1440 photo, the one backed by the
+  /// highest-resolution sensor readout is chosen: requesting 1920x1440 via
+  /// `maxPhotoDimensions` then has the ISP *downsample* a full-resolution
+  /// capture (e.g. 4032x3024 -> 1920x1440), which averages out sensor noise the
+  /// same way `image_picker`'s `.photo`-then-downscale path does. Picking a
+  /// binned low-res format instead would capture 1920x1440 natively and look
+  /// noticeably noisier on the ultra-wide lens.
+  ///
+  /// Returns nil if the device exposes no suitable 4:3 photo format.
+  @available(iOS 16.0, *)
+  private func fourThreePhotoFormat() -> (CaptureDeviceFormat, CMVideoDimensions)? {
+    func isFourThree(_ d: CMVideoDimensions) -> Bool {
+      let long = Double(max(d.width, d.height))
+      let short = Double(min(d.width, d.height))
+      return short > 0 && abs(long / short - 4.0 / 3.0) < 0.02
+    }
+    func longSide(_ d: CMVideoDimensions) -> Int { Int(max(d.width, d.height)) }
+
+    var best: (format: CaptureDeviceFormat, target: CMVideoDimensions, sensor: Int)?
+    for format in captureDevice.flutterFormats {
+      let fourThree = format.avFormat.supportedMaxPhotoDimensions.filter(isFourThree)
+      // Candidate output sizes near the 1920 target (allow a little above so a
+      // ~2 MP format still qualifies); skip formats that can only emit
+      // full-resolution stills (they'd produce a 12 MP file, not ~1920x1440).
+      let nearTarget = fourThree.filter { (1440...2400).contains(longSide($0)) }
+      guard
+        let target = nearTarget.min(by: {
+          abs(longSide($0) - 1920) < abs(longSide($1) - 1920)
+        })
+      else { continue }
+
+      // Sensor-quality proxy: the largest 4:3 still this format can produce.
+      // Higher means more oversampling when downsampled to the target.
+      let sensor = fourThree.map { Int($0.width) * Int($0.height) }.max() ?? 0
+      if best == nil || sensor > best!.sensor {
+        best = (format, target, sensor)
+      }
+    }
+
+    guard let best else { return nil }
+    return (best.format, best.target)
   }
 
   /// Finds the highest available non-square resolution in terms of pixel count for the given device.
@@ -727,13 +792,19 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
-    // Opt into AVFoundation's quality-prioritised photo pipeline (Deep Fusion,
-    // Smart HDR, OIS-aware longer fusion windows on capable hardware). This
-    // produces visibly sharper handheld shots on the OIS-bearing wide
-    // constituent of virtual multi-lens devices at the cost of slightly longer
-    // capture latency in low light. On older SoCs without those pipelines the
-    // value is accepted but behaves equivalently to `.balanced`.
-    settings.photoQualityPrioritization = .quality
+    // Use the default `.balanced` photo quality prioritization. (`.quality`
+    // trades capture latency for multi-frame fusion; not wanted here.)
+    settings.photoQualityPrioritization = .balanced
+
+    // Constrain the processed photo to the target dimensions selected for the
+    // active format (see `configurePhotoOutputMaxDimensions`). This makes the
+    // ISP emit the downscaled size in-pipeline (iOS 16+) — e.g. 1920x1440 from
+    // the 4:3 `.photo` source — with no Dart-side rescale. The per-shot value
+    // defaults to the output's `maxPhotoDimensions`, but we set it explicitly
+    // so it survives the HEIF settings reassignment above.
+    if #available(iOS 16.0, *), let dimensions = photoMaxDimensions {
+      settings.maxPhotoDimensions = dimensions
+    }
 
     if flashMode != .torch {
       settings.flashMode = getAVCaptureFlashMode(for: flashMode)
