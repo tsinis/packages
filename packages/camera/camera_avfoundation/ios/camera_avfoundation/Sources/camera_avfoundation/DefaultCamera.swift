@@ -185,10 +185,7 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
-    // Keep the per-shot quality cap at `.balanced` (AVFoundation's default).
-    // `.quality` would add visible capture latency in low light and must not
-    // exceed this cap or AVFoundation throws `NSInvalidArgumentException`.
-    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .balanced
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
@@ -792,9 +789,7 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
-    // Use the default `.balanced` photo quality prioritization. (`.quality`
-    // trades capture latency for multi-frame fusion; not wanted here.)
-    settings.photoQualityPrioritization = .balanced
+    settings.photoQualityPrioritization = .quality
 
     // Constrain the processed photo to the target dimensions selected for the
     // active format (see `configurePhotoOutputMaxDimensions`). This makes the
