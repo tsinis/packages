@@ -185,7 +185,7 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
-    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .balanced
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
@@ -311,9 +311,27 @@ final class DefaultCamera: NSObject, Camera {
         try captureDevice.lockForConfiguration()
         captureDevice.flutterActiveFormat = format
         captureDevice.unlockForConfiguration()
-        capturePhotoOutput.avOutput.maxPhotoDimensions = dimensions
-        photoMaxDimensions = dimensions
-        break
+        // Provable crash-safety: keep the pinned format only if the video data
+        // output can actually deliver every pixel format the plugin may set on
+        // it (see `getPixelFormat`). This is checked against the live API, not
+        // inferred from the format's type, so it holds on any current or future
+        // device: if a format's output can't serve these, we fall back to a
+        // standard preset instead of letting `videoSettings` throw "Unsupported
+        // pixel format type" during initialization (as exotic high-resolution
+        // formats on newer devices do).
+        let requiredPixelFormats: Set<FourCharCode> = [
+          kCVPixelFormatType_32BGRA,
+          kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        ]
+        if Set(captureVideoOutput.availableVideoPixelFormatTypes)
+          .isSuperset(of: requiredPixelFormats)
+        {
+          capturePhotoOutput.avOutput.maxPhotoDimensions = dimensions
+          photoMaxDimensions = dimensions
+          break
+        }
+        // The pinned format can't serve the plugin's pixel formats; discard it
+        // and fall back to a standard preset below (which reselects a format).
       }
       if videoCaptureSession.canSetSessionPreset(.hd1920x1080) {
         videoCaptureSession.sessionPreset = .hd1920x1080
@@ -378,8 +396,24 @@ final class DefaultCamera: NSObject, Camera {
     }
     func longSide(_ d: CMVideoDimensions) -> Int { Int(max(d.width, d.height)) }
 
+    // Only consider formats backed by a standard 8-bit bi-planar YUV pixel
+    // subtype. These are the only subtypes the `AVCaptureVideoDataOutput` used
+    // for preview/streaming can deliver; pinning an exotic subtype (e.g. the
+    // Bayer-packed or 10-bit formats that newer devices such as iPhone 17 Pro
+    // list as their highest-resolution 4:3 format) makes
+    // `AVCaptureVideoDataOutput.setVideoSettings` throw "Unsupported pixel
+    // format type" and crashes camera initialization.
+    let safeSubTypes: Set<FourCharCode> = [
+      kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,  // '420v'
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,  // '420f'
+    ]
+
     var best: (format: CaptureDeviceFormat, target: CMVideoDimensions, sensor: Int)?
     for format in captureDevice.flutterFormats {
+      guard safeSubTypes.contains(CMFormatDescriptionGetMediaSubType(format.formatDescription))
+      else {
+        continue
+      }
       let fourThree = format.avFormat.supportedMaxPhotoDimensions.filter(isFourThree)
       // Candidate output sizes near the 1920 target (allow a little above so a
       // ~2 MP format still qualifies); skip formats that can only emit
@@ -789,7 +823,7 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
-    settings.photoQualityPrioritization = .quality
+    settings.photoQualityPrioritization = .balanced
 
     // Constrain the processed photo to the target dimensions selected for the
     // active format (see `configurePhotoOutputMaxDimensions`). This makes the
