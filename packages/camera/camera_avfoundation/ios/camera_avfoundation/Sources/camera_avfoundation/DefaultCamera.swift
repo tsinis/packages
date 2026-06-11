@@ -22,8 +22,37 @@ final class DefaultCamera: NSObject, Camera {
 
   var minimumExposureOffset: CGFloat { CGFloat(captureDevice.minExposureTargetBias) }
   var maximumExposureOffset: CGFloat { CGFloat(captureDevice.maxExposureTargetBias) }
-  var minimumAvailableZoomFactor: CGFloat { captureDevice.minAvailableVideoZoomFactor }
-  var maximumAvailableZoomFactor: CGFloat { captureDevice.maxAvailableVideoZoomFactor }
+  var minimumAvailableZoomFactor: CGFloat {
+    captureDevice.minAvailableVideoZoomFactor / wideLensZoomFactor
+  }
+  var maximumAvailableZoomFactor: CGFloat {
+    captureDevice.maxAvailableVideoZoomFactor / wideLensZoomFactor
+  }
+
+  /// Fork: native zoom factor of the wide-angle constituent on virtual devices
+  /// whose zoom range starts at the ultra-wide lens (dualWide/triple). All
+  /// Dart-facing zoom values are expressed relative to it, so `setZoomLevel(1.0)`
+  /// selects the same physical wide lens and framing as the system camera's
+  /// "1×" (`UIImagePickerController` parity) and `getMinZoomLevel` reports
+  /// ~0.5. The factor is hardware-specific (2.0 on 26mm-main devices like
+  /// iPhone 12, ~1.85 on 24mm-main devices like iPhone 14 Pro and later),
+  /// which is why it is queried rather than hardcoded.
+  ///
+  /// Returns 1.0 — leaving zoom semantics untouched — for physical devices and
+  /// for the legacy wide+tele `builtInDualCamera`, whose zoom already starts
+  /// at the wide lens.
+  private var wideLensZoomFactor: CGFloat {
+    guard
+      captureDevice.deviceType == .builtInDualWideCamera
+        || captureDevice.deviceType == .builtInTripleCamera,
+      let factor = captureDevice.virtualDeviceSwitchOverVideoZoomFactors.first
+    else { return 1.0 }
+    // Slightly above the switch-over: exactly at it, constituent-switching
+    // hysteresis can keep the digitally-cropped ultra-wide active, which has
+    // the same field of view but a visibly offset viewpoint (the lenses sit a
+    // few millimetres apart on the camera bump).
+    return CGFloat(truncating: factor) + 0.001
+  }
 
   /// The queue on which `latestPixelBuffer` property is accessed.
   /// To avoid unnecessary contention, do not access `latestPixelBuffer` on the `captureSessionQueue`.
@@ -64,12 +93,6 @@ final class DefaultCamera: NSObject, Camera {
   // Setter exposed for tests.
   var capturePhotoOutput: CapturePhotoOutput
   private var captureVideoInput: CaptureInput
-
-  /// The processed-photo output size selected for the active format, used to
-  /// drive in-pipeline downscaling on iOS 16+. `nil` when dimension targeting
-  /// is not applied (e.g. iOS < 16, or a non-photo session preset). See
-  /// `configurePhotoOutputMaxDimensions`.
-  private var photoMaxDimensions: CMVideoDimensions?
 
   private var videoWriter: AssetWriter?
   private var videoWriterInput: AssetWriterInput?
@@ -239,6 +262,17 @@ final class DefaultCamera: NSObject, Camera {
       try setCaptureSessionPreset(mediaSettings.resolutionPreset)
     }
 
+    // Open dualWide/triple cameras on their wide-angle constituent — the
+    // framing and viewpoint of the system camera's "1×" — instead of
+    // AVFoundation's default of the ultra-wide minimum. Combined with the
+    // wide-equivalent zoom scale (see `wideLensZoomFactor`), apps start at
+    // parity with `UIImagePickerController` without any seeding call.
+    if wideLensZoomFactor > 1.0 {
+      try? captureDevice.lockForConfiguration()
+      captureDevice.videoZoomFactor = wideLensZoomFactor
+      captureDevice.unlockForConfiguration()
+    }
+
     updateOrientation()
 
     // Handle video and audio interruptions and errors. Interruption can happen for example by
@@ -301,37 +335,21 @@ final class DefaultCamera: NSObject, Camera {
       }
       fallthrough
     case .veryHigh:
-      // Pin a 4:3 format that natively emits ~1920x1440 stills (matching
-      // `image_picker`) instead of the softer 16:9 `.hd1920x1080` crop. The
-      // `.photo` preset can't be used: on many devices its format only offers
-      // the full-sensor photo size (e.g. 4032x3024), leaving `maxPhotoDimensions`
-      // nothing smaller to target. iOS 16+; older iOS falls back to 1080p.
-      if #available(iOS 16.0, *), let (format, dimensions) = fourThreePhotoFormat() {
-        videoCaptureSession.sessionPreset = .inputPriority
-        try captureDevice.lockForConfiguration()
-        captureDevice.flutterActiveFormat = format
-        captureDevice.unlockForConfiguration()
-        // Provable crash-safety: keep the pinned format only if the video data
-        // output can actually deliver every pixel format the plugin may set on
-        // it (see `getPixelFormat`). This is checked against the live API, not
-        // inferred from the format's type, so it holds on any current or future
-        // device: if a format's output can't serve these, we fall back to a
-        // standard preset instead of letting `videoSettings` throw "Unsupported
-        // pixel format type" during initialization (as exotic high-resolution
-        // formats on newer devices do).
-        let requiredPixelFormats: Set<FourCharCode> = [
-          kCVPixelFormatType_32BGRA,
-          kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-        ]
-        if Set(captureVideoOutput.availableVideoPixelFormatTypes)
-          .isSuperset(of: requiredPixelFormats)
-        {
-          capturePhotoOutput.avOutput.maxPhotoDimensions = dimensions
-          photoMaxDimensions = dimensions
-          break
-        }
-        // The pinned format can't serve the plugin's pixel formats; discard it
-        // and fall back to a standard preset below (which reselects a format).
+      // Fork: use the system `.photo` preset so stills run through Apple's
+      // full computational pipeline (Smart HDR multi-frame fusion — the
+      // "CompositeImage" EXIF tag), exactly like `UIImagePickerController`.
+      // The fused full-resolution photo is then downscaled to a 1920-long-side
+      // image in `SavePhotoDelegate` (ImageIO, ~tens of ms) — the same
+      // capture-then-scale architecture `image_picker` uses. The session and
+      // format stay entirely system-managed: no `.inputPriority` pinning, so
+      // exotic pixel formats on newer devices are never selected and the
+      // "Unsupported pixel format type" crash class does not exist here.
+      //
+      // NOTE: `.photo` is optimized for stills; video recording at `.veryHigh`
+      // is degraded compared to the upstream 16:9 `.hd1920x1080` behavior.
+      if videoCaptureSession.canSetSessionPreset(.photo) {
+        videoCaptureSession.sessionPreset = .photo
+        break
       }
       if videoCaptureSession.canSetSessionPreset(.hd1920x1080) {
         videoCaptureSession.sessionPreset = .hd1920x1080
@@ -372,69 +390,6 @@ final class DefaultCamera: NSObject, Camera {
     let size = videoDimensionsConverter(captureDevice.flutterActiveFormat)
     previewSize = CGSize(width: CGFloat(size.width), height: CGFloat(size.height))
     audioCaptureSession.sessionPreset = videoCaptureSession.sessionPreset
-  }
-
-  /// Returns the 4:3 device format and the photo dimension to request for
-  /// `ResolutionPreset.veryHigh`, so stills match `image_picker` geometry
-  /// (~1920x1440) in-pipeline with no rescale.
-  ///
-  /// Among 4:3 formats that can emit a ~1920x1440 photo, the one backed by the
-  /// highest-resolution sensor readout is chosen: requesting 1920x1440 via
-  /// `maxPhotoDimensions` then has the ISP *downsample* a full-resolution
-  /// capture (e.g. 4032x3024 -> 1920x1440), which averages out sensor noise the
-  /// same way `image_picker`'s `.photo`-then-downscale path does. Picking a
-  /// binned low-res format instead would capture 1920x1440 natively and look
-  /// noticeably noisier on the ultra-wide lens.
-  ///
-  /// Returns nil if the device exposes no suitable 4:3 photo format.
-  @available(iOS 16.0, *)
-  private func fourThreePhotoFormat() -> (CaptureDeviceFormat, CMVideoDimensions)? {
-    func isFourThree(_ d: CMVideoDimensions) -> Bool {
-      let long = Double(max(d.width, d.height))
-      let short = Double(min(d.width, d.height))
-      return short > 0 && abs(long / short - 4.0 / 3.0) < 0.02
-    }
-    func longSide(_ d: CMVideoDimensions) -> Int { Int(max(d.width, d.height)) }
-
-    // Only consider formats backed by a standard 8-bit bi-planar YUV pixel
-    // subtype. These are the only subtypes the `AVCaptureVideoDataOutput` used
-    // for preview/streaming can deliver; pinning an exotic subtype (e.g. the
-    // Bayer-packed or 10-bit formats that newer devices such as iPhone 17 Pro
-    // list as their highest-resolution 4:3 format) makes
-    // `AVCaptureVideoDataOutput.setVideoSettings` throw "Unsupported pixel
-    // format type" and crashes camera initialization.
-    let safeSubTypes: Set<FourCharCode> = [
-      kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,  // '420v'
-      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,  // '420f'
-    ]
-
-    var best: (format: CaptureDeviceFormat, target: CMVideoDimensions, sensor: Int)?
-    for format in captureDevice.flutterFormats {
-      guard safeSubTypes.contains(CMFormatDescriptionGetMediaSubType(format.formatDescription))
-      else {
-        continue
-      }
-      let fourThree = format.avFormat.supportedMaxPhotoDimensions.filter(isFourThree)
-      // Candidate output sizes near the 1920 target (allow a little above so a
-      // ~2 MP format still qualifies); skip formats that can only emit
-      // full-resolution stills (they'd produce a 12 MP file, not ~1920x1440).
-      let nearTarget = fourThree.filter { (1440...2400).contains(longSide($0)) }
-      guard
-        let target = nearTarget.min(by: {
-          abs(longSide($0) - 1920) < abs(longSide($1) - 1920)
-        })
-      else { continue }
-
-      // Sensor-quality proxy: the largest 4:3 still this format can produce.
-      // Higher means more oversampling when downsampled to the target.
-      let sensor = fourThree.map { Int($0.width) * Int($0.height) }.max() ?? 0
-      if best == nil || sensor > best!.sensor {
-        best = (format, target, sensor)
-      }
-    }
-
-    guard let best else { return nil }
-    return (best.format, best.target)
   }
 
   /// Finds the highest available non-square resolution in terms of pixel count for the given device.
@@ -598,6 +553,15 @@ final class DefaultCamera: NSObject, Camera {
   func start() {
     videoCaptureSession.startRunning()
     audioCaptureSession.startRunning()
+    // Pre-allocate the photo capture pipeline for the settings `captureToFile`
+    // will request. Without this, AVCapturePhotoOutput defers pipeline setup to
+    // the first `capturePhoto` call, which pays a one-time preparation cost
+    // (hundreds of ms up to ~1s on some devices) — the system camera UI
+    // (UIImagePickerController/Camera.app) is always pre-prepared, which is why
+    // its first shot feels instant. Preparation failures are non-fatal: capture
+    // still works, just with first-shot latency, so the completion is ignored.
+    capturePhotoOutput.avOutput.setPreparedPhotoSettingsArray(
+      [AVCapturePhotoSettings()], completionHandler: nil)
   }
 
   func stop() {
@@ -825,16 +789,6 @@ final class DefaultCamera: NSObject, Camera {
 
     settings.photoQualityPrioritization = .balanced
 
-    // Constrain the processed photo to the target dimensions selected for the
-    // active format (see `configurePhotoOutputMaxDimensions`). This makes the
-    // ISP emit the downscaled size in-pipeline (iOS 16+) — e.g. 1920x1440 from
-    // the 4:3 `.photo` source — with no Dart-side rescale. The per-shot value
-    // defaults to the output's `maxPhotoDimensions`, but we set it explicitly
-    // so it survives the HEIF settings reassignment above.
-    if #available(iOS 16.0, *), let dimensions = photoMaxDimensions {
-      settings.maxPhotoDimensions = dimensions
-    }
-
     if flashMode != .torch {
       settings.flashMode = getAVCaptureFlashMode(for: flashMode)
     }
@@ -853,6 +807,10 @@ final class DefaultCamera: NSObject, Camera {
     let savePhotoDelegate = SavePhotoDelegate(
       path: path,
       ioQueue: photoIOQueue,
+      // At `.veryHigh` the session uses the `.photo` preset and captures the
+      // full-resolution fused photo; scale it to image_picker geometry
+      // (1920-long-side, e.g. 1920x1440) before writing to disk.
+      maxPixelSize: mediaSettings.resolutionPreset == .veryHigh ? 1920 : nil,
       completionHandler: { [weak self] path, error in
         guard let strongSelf = self else { return }
 
@@ -1098,15 +1056,13 @@ final class DefaultCamera: NSObject, Camera {
   func setZoomLevel(
     _ zoom: CGFloat, withCompletion completion: @escaping (Result<Void, any Error>) -> Void
   ) {
-    if zoom < captureDevice.minAvailableVideoZoomFactor
-      || zoom > captureDevice.maxAvailableVideoZoomFactor
-    {
+    if zoom < minimumAvailableZoomFactor || zoom > maximumAvailableZoomFactor {
       completion(
         .failure(
           PigeonError(
             code: "ZOOM_ERROR",
             message:
-              "Zoom level out of bounds (zoom level should be between \(captureDevice.minAvailableVideoZoomFactor) and \(captureDevice.maxAvailableVideoZoomFactor).",
+              "Zoom level out of bounds (zoom level should be between \(minimumAvailableZoomFactor) and \(maximumAvailableZoomFactor).",
             details: nil)))
       return
     }
@@ -1118,7 +1074,12 @@ final class DefaultCamera: NSObject, Camera {
       return
     }
 
-    captureDevice.videoZoomFactor = zoom
+    // Convert from the Dart-facing wide-equivalent scale back to the device's
+    // native scale, clamping to guard against floating-point drift at the
+    // bounds (an out-of-range `videoZoomFactor` raises an exception).
+    captureDevice.videoZoomFactor = min(
+      max(zoom * wideLensZoomFactor, captureDevice.minAvailableVideoZoomFactor),
+      captureDevice.maxAvailableVideoZoomFactor)
     captureDevice.unlockForConfiguration()
     completion(.success(()))
   }

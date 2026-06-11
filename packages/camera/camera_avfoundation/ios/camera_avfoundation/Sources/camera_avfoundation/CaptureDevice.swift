@@ -25,6 +25,11 @@ protocol CaptureDevice: NSObjectProtocol {
   var flutterActiveFormat: CaptureDeviceFormat { get set }
   var flutterFormats: [CaptureDeviceFormat] { get }
 
+  // Zoom factors at which a virtual (multi-lens) device switches between its
+  // constituent physical cameras. Empty for physical devices.
+  // `AVCaptureDevice` satisfies this requirement with its native property.
+  var virtualDeviceSwitchOverVideoZoomFactors: [NSNumber] { get }
+
   // Flash/Torch
   var hasFlash: Bool { get }
   var hasTorch: Bool { get }
