@@ -208,7 +208,7 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
-    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .balanced
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
@@ -260,17 +260,6 @@ final class DefaultCamera: NSObject, Camera {
       // If the frame rate is not important fall to a less restrictive
       // behavior (no configuration locking).
       try setCaptureSessionPreset(mediaSettings.resolutionPreset)
-    }
-
-    // Open dualWide/triple cameras on their wide-angle constituent — the
-    // framing and viewpoint of the system camera's "1×" — instead of
-    // AVFoundation's default of the ultra-wide minimum. Combined with the
-    // wide-equivalent zoom scale (see `wideLensZoomFactor`), apps start at
-    // parity with `UIImagePickerController` without any seeding call.
-    if wideLensZoomFactor > 1.0 {
-      try? captureDevice.lockForConfiguration()
-      captureDevice.videoZoomFactor = wideLensZoomFactor
-      captureDevice.unlockForConfiguration()
     }
 
     updateOrientation()
@@ -553,6 +542,20 @@ final class DefaultCamera: NSObject, Camera {
   func start() {
     videoCaptureSession.startRunning()
     audioCaptureSession.startRunning()
+    // Open dualWide/triple cameras on their wide-angle constituent — the
+    // framing and viewpoint of the system camera's "1×" — instead of
+    // AVFoundation's default of the ultra-wide minimum. This must happen
+    // AFTER the session starts running: constituent-device selection is only
+    // re-evaluated when the zoom factor crosses a switch-over threshold in a
+    // live session. A factor assigned during configuration is honored as a
+    // digital crop of the ultra-wide constituent without ever switching to
+    // the physical wide lens, which has the same field of view but a visibly
+    // offset viewpoint (the lenses sit millimetres apart on the camera bump).
+    if wideLensZoomFactor > 1.0 {
+      try? captureDevice.lockForConfiguration()
+      captureDevice.videoZoomFactor = wideLensZoomFactor
+      captureDevice.unlockForConfiguration()
+    }
     // Pre-allocate the photo capture pipeline for the settings `captureToFile`
     // will request. Without this, AVCapturePhotoOutput defers pipeline setup to
     // the first `capturePhoto` call, which pays a one-time preparation cost
@@ -787,7 +790,7 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
-    settings.photoQualityPrioritization = .balanced
+    settings.photoQualityPrioritization = .quality
 
     if flashMode != .torch {
       settings.flashMode = getAVCaptureFlashMode(for: flashMode)
