@@ -208,7 +208,7 @@ final class DefaultCamera: NSObject, Camera {
 
     capturePhotoOutput = AVCapturePhotoOutput()
     capturePhotoOutput.isHighResolutionCaptureEnabled = true
-    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .quality
+    capturePhotoOutput.avOutput.maxPhotoQualityPrioritization = .balanced
 
     videoCaptureSession.automaticallyConfiguresApplicationAudioSession = false
     audioCaptureSession.automaticallyConfiguresApplicationAudioSession = false
@@ -790,7 +790,7 @@ final class DefaultCamera: NSObject, Camera {
       fileExtension = "jpg"
     }
 
-    settings.photoQualityPrioritization = .quality
+    settings.photoQualityPrioritization = .balanced
 
     if flashMode != .torch {
       settings.flashMode = getAVCaptureFlashMode(for: flashMode)
