@@ -552,9 +552,21 @@ final class DefaultCamera: NSObject, Camera {
     // the physical wide lens, which has the same field of view but a visibly
     // offset viewpoint (the lenses sit millimetres apart on the camera bump).
     if wideLensZoomFactor > 1.0 {
-      try? captureDevice.lockForConfiguration()
-      captureDevice.videoZoomFactor = wideLensZoomFactor
-      captureDevice.unlockForConfiguration()
+      do {
+        try captureDevice.lockForConfiguration()
+        captureDevice.videoZoomFactor = wideLensZoomFactor
+        captureDevice.unlockForConfiguration()
+      } catch {
+        // The device is held elsewhere (an interruption, another session,
+        // Continuity Camera). Skip the seed rather than write without the
+        // lock, which raises an Objective-C `NSGenericException` that Swift
+        // cannot catch. The cost is degraded, not broken: the camera opens on
+        // the ultra-wide constituent's framing until the first `setZoomLevel`
+        // corrects it. Reported because this runs once per session open —
+        // unlike the per-tap focus/exposure paths, which stay silent.
+        reportErrorMessage(
+          "Unable to lock device to seed wide-lens zoom: \(error.localizedDescription)")
+      }
     }
     // Pre-allocate the photo capture pipeline for the settings `captureToFile`
     // will request. Without this, AVCapturePhotoOutput defers pipeline setup to
@@ -923,7 +935,18 @@ final class DefaultCamera: NSObject, Camera {
   }
 
   private func applyExposureMode() {
-    try? captureDevice.lockForConfiguration()
+    // Fork: writing a device property without holding the configuration lock
+    // raises an Objective-C `NSGenericException`, which Swift cannot catch —
+    // it terminates the app. Upstream's `try?` ignored a failed lock and wrote
+    // anyway, then unbalanced the lock with an unconditional unlock. Skip
+    // instead. Silent by design: this runs on every tap-to-focus, so a
+    // transiently busy device would otherwise push the Dart `CameraController`
+    // into an error state once per tap.
+    do {
+      try captureDevice.lockForConfiguration()
+    } catch {
+      return
+    }
     switch exposureMode {
     case .locked:
       // AVCaptureExposureMode.autoExpose automatically adjusts the exposure one time, and then locks exposure for the device
@@ -941,7 +964,12 @@ final class DefaultCamera: NSObject, Camera {
   }
 
   func setExposureOffset(_ offset: Double) {
-    try? captureDevice.lockForConfiguration()
+    // Fork: see `applyExposureMode` — never write without the lock.
+    do {
+      try captureDevice.lockForConfiguration()
+    } catch {
+      return
+    }
     captureDevice.setExposureTargetBias(Float(offset), completionHandler: nil)
     captureDevice.unlockForConfiguration()
   }
@@ -1023,7 +1051,13 @@ final class DefaultCamera: NSObject, Camera {
   private func applyFocusMode(
     _ focusMode: PlatformFocusMode, onDevice captureDevice: CaptureDevice
   ) {
-    try? captureDevice.lockForConfiguration()
+    // Fork: see `applyExposureMode` — never write without the lock, and stay
+    // silent because this also runs on every tap-to-focus.
+    do {
+      try captureDevice.lockForConfiguration()
+    } catch {
+      return
+    }
     switch focusMode {
     case .locked:
       // AVCaptureFocusMode.autoFocus automatically adjusts the focus one time, and then locks focus
