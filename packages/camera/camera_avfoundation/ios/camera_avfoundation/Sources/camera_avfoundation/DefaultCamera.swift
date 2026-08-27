@@ -946,6 +946,10 @@ final class DefaultCamera: NSObject, Camera {
     captureDevice.unlockForConfiguration()
   }
 
+  private var pointOfInterestOrientation: UIDeviceOrientation {
+    (lockedCaptureOrientation != .unknown) ? lockedCaptureOrientation : deviceOrientation
+  }
+
   func setExposurePoint(
     _ point: PlatformPoint?, withCompletion completion: @escaping (Result<Void, any Error>) -> Void
   ) {
@@ -959,11 +963,16 @@ final class DefaultCamera: NSObject, Camera {
       return
     }
 
-    let orientation = UIDevice.current.orientation
-    try? captureDevice.lockForConfiguration()
     // A nil point resets to the center.
     let exposurePoint = cgPoint(
-      for: point ?? PlatformPoint(x: 0.5, y: 0.5), withOrientation: orientation)
+      for: point ?? PlatformPoint(x: 0.5, y: 0.5), withOrientation: pointOfInterestOrientation)
+
+    do {
+      try captureDevice.lockForConfiguration()
+    } catch let error as NSError {
+      completion(.failure(DefaultCamera.pigeonErrorFromNSError(error)))
+      return
+    }
     captureDevice.exposurePointOfInterest = exposurePoint
     captureDevice.unlockForConfiguration()
     // Retrigger auto exposure
@@ -989,14 +998,18 @@ final class DefaultCamera: NSObject, Camera {
       return
     }
 
-    let orientation = deviceOrientationProvider.orientation
-    try? captureDevice.lockForConfiguration()
     // A nil point resets to the center.
-    captureDevice.focusPointOfInterest =
-      cgPoint(
-        for: point ?? PlatformPoint(x: 0.5, y: 0.5),
-        withOrientation: orientation)
+    let focusPoint = cgPoint(
+      for: point ?? PlatformPoint(x: 0.5, y: 0.5),
+      withOrientation: pointOfInterestOrientation)
 
+    do {
+      try captureDevice.lockForConfiguration()
+    } catch let error as NSError {
+      completion(.failure(DefaultCamera.pigeonErrorFromNSError(error)))
+      return
+    }
+    captureDevice.focusPointOfInterest = focusPoint
     captureDevice.unlockForConfiguration()
     // Retrigger auto focus
     applyFocusMode()
